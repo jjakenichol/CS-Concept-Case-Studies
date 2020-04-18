@@ -1,9 +1,14 @@
-"""Doc here."""
+"""Example of a 2 layer feed-forward Neural Network implementation."""
 import numpy as np
+from scipy import optimize
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.set()
 
 
 class Neural_Network(object):
-    """."""
+    """A 2 layer feed-forward neural network."""
 
     def __init__(self):
         """Define Hyperparameters."""
@@ -74,6 +79,56 @@ class Neural_Network(object):
         return np.concatenate((dJdW1.ravel(), dJdW2.ravel()))
 
 
+class trainer(object):
+    def __init__(self, N):
+        """Make local reference to Neural Network."""
+        self.N = N
+
+    def costFunctionWrapper(self, params, X, y):
+        """Wrapper function for cost function to satisfy BFGS minimization.
+
+        BFGS minimization requires that we pass an objective function that accepts a
+        vector of parameters, input, and output data, and returns both the cost and
+        gradients.
+        """
+        self.N.setParams(params)
+        cost = self.N.costFunction(X, y)
+        grad = self.N.computeGradients(X, y)
+        return cost, grad
+
+    def callbackF(self, params):
+        """Allows network to track the cost function values as the network is
+        trained.
+        """
+        self.N.setParams(params)
+        self.J.append(self.N.costFunction(self.X, self.y))
+
+    def train(self, X, y):
+        """Train the neural network."""
+        # Make internal varable for callback function
+        self.X = X
+        self.y = y
+
+        # Make empty list to store costs
+        self.J = []
+
+        params0 = self.N.getParams()
+
+        options = {"maxiter": 200, "disp": True}
+        _res = optimize.minimize(
+            self.costFunctionWrapper,
+            params0,
+            jac=True,
+            method="BFGS",
+            args=(X, y),
+            options=options,
+            callback=self.callbackF,
+        )
+
+        self.N.setParams(_res.x)
+        self.optimizationResults = _res
+
+
 def computeNumericalGradient(N, X, y):
     """."""
     params_initial = N.getParams()
@@ -115,7 +170,7 @@ y = y / 100  # Max test score is 100
 # Part 2 data
 testInput = np.arange(-6, 6, 0.01)
 
-
+# Parts 1-5
 cost1 = NN.costFunction(X, y)
 dJdW1, dJdW2 = NN.costFunctionPrime(X, y)
 print("dJdW1=\n", dJdW1)
@@ -139,3 +194,62 @@ yHat = NN.forward(X)
 print("X=\n", X)
 print("y=\n", y)
 print("yHat=\n", yHat)
+
+# Part 6
+T = trainer(NN)
+T.train(X, y)
+
+fig, ax = plt.subplots()
+plt.plot(T.J)
+ax.set_ylabel("Cost")
+ax.set_xlabel("Iteration")
+ax.grid(1)
+plt.show()
+
+print("Evaluated gradient at solution:\n", NN.costFunctionPrime(X, y))
+print()
+
+print("Predicted values by passing input forward through network=\n", NN.forward(X))
+print("y_true =\n", y)
+
+# Test network for various combinations of sleep/study:
+hoursSleep = np.linspace(0, 10, 100)
+hoursStudy = np.linspace(0, 5, 100)
+
+# Normalize data (same way trainings data was normalized)
+hoursSleepNorm = hoursSleep / 10.0
+hoursStudyNorm = hoursStudy / 5.0
+
+# Create 2-d verstions of input for plotting
+a, b = np.meshgrid(hoursSleepNorm, hoursStudyNorm)
+
+# Join into a single input matrix:
+allInputs = np.zeros((a.size, 2))
+allInputs[:, 0] = a.ravel()
+allInputs[:, 1] = b.ravel()
+
+allOutputs = NN.forward(allInputs)
+
+# Contour Plot:
+yy = np.dot(hoursStudy.reshape(100, 1), np.ones((1, 100)))
+xx = np.dot(hoursSleep.reshape(100, 1), np.ones((1, 100))).T
+
+CS = plt.contour(xx, yy, 100 * allOutputs.reshape(100, 100))
+plt.clabel(CS, inline=1, fontsize=10)
+plt.xlabel("Hours Sleep")
+plt.ylabel("Hours Study")
+plt.show()
+
+
+# 3D plot:
+##Uncomment to plot out-of-notebook (you'll be able to rotate)
+#%matplotlib qt
+from mpl_toolkits.mplot3d import Axes3D
+
+fig = plt.figure()
+ax = fig.gca(projection="3d")
+surf = ax.plot_surface(xx, yy, 100 * allOutputs.reshape(100, 100), cmap=plt.cm.jet)
+ax.set_xlabel("Hours Sleep")
+ax.set_ylabel("Hours Study")
+ax.set_zlabel("Test Score")
+plt.show()
